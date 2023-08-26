@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <title>Reports.CredCartReport.html</title>
+    <link href="assets/style.css" rel="stylesheet" type="text/css"/></head>
+  <body onLoad="init()">
+    <script>/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+
+function toArray(iter) {
+    if (iter === null) {
+        return null;
+    }
+    return Array.prototype.slice.call(iter);
+}
+
+function find(selector, elem) { // eslint-disable-line no-redeclare
+    if (!elem) {
+        elem = document;
+    }
+    return elem.querySelector(selector);
+}
+
+function findAll(selector, elem) {
+    if (!elem) {
+        elem = document;
+    }
+    return toArray(elem.querySelectorAll(selector));
+}
+
+function sortColumn(elem) {
+    toggleSortStates(elem);
+    const colIndex = toArray(elem.parentNode.childNodes).indexOf(elem);
+    let key;
+    if (elem.classList.contains('result')) {
+        key = keyResult;
+    } else if (elem.classList.contains('links')) {
+        key = keyLink;
+    } else {
+        key = keyAlpha;
+    }
+    sortTable(elem, key(colIndex));
+}
+
+function showAllExtras() { // eslint-disable-line no-unused-vars
+    findAll('.col-result').forEach(showExtras);
+}
+
+function hideAllExtras() { // eslint-disable-line no-unused-vars
+    findAll('.col-result').forEach(hideExtras);
+}
+
+function showExtras(colresultElem) {
+    const extras = colresultElem.parentNode.nextElementSibling;
+    const expandcollapse = colresultElem.firstElementChild;
+    extras.classList.remove('collapsed');
+    expandcollapse.classList.remove('expander');
+    expandcollapse.classList.add('collapser');
+}
+
+function hideExtras(colresultElem) {
+    const extras = colresultElem.parentNode.nextElementSibling;
+    const expandcollapse = colresultElem.firstElementChild;
+    extras.classList.add('collapsed');
+    expandcollapse.classList.remove('collapser');
+    expandcollapse.classList.add('expander');
+}
+
+function showFilters() {
+    let visibleString = getQueryParameter('visible') || 'all';
+    visibleString = visibleString.toLowerCase();
+    const checkedItems = visibleString.split(',');
+
+    const filterItems = document.getElementsByClassName('filter');
+    for (let i = 0; i < filterItems.length; i++) {
+        filterItems[i].hidden = false;
+
+        if (visibleString != 'all') {
+            filterItems[i].checked = checkedItems.includes(filterItems[i].getAttribute('data-test-result'));
+            filterTable(filterItems[i]);
+        }
+    }
+}
+
+function addCollapse() {
+    // Add links for show/hide all
+    const resulttable = find('table#results-table');
+    const showhideall = document.createElement('p');
+    showhideall.innerHTML = '<a href="javascript:showAllExtras()">Show all details</a> / ' +
+                            '<a href="javascript:hideAllExtras()">Hide all details</a>';
+    resulttable.parentElement.insertBefore(showhideall, resulttable);
+
+    // Add show/hide link to each result
+    findAll('.col-result').forEach(function(elem) {
+        const collapsed = getQueryParameter('collapsed') || 'Passed';
+        const extras = elem.parentNode.nextElementSibling;
+        const expandcollapse = document.createElement('span');
+        if (extras.classList.contains('collapsed')) {
+            expandcollapse.classList.add('expander');
+        } else if (collapsed.includes(elem.innerHTML)) {
+            extras.classList.add('collapsed');
+            expandcollapse.classList.add('expander');
+        } else {
+            expandcollapse.classList.add('collapser');
+        }
+        elem.appendChild(expandcollapse);
+
+        elem.addEventListener('click', function(event) {
+            if (event.currentTarget.parentNode.nextElementSibling.classList.contains('collapsed')) {
+                showExtras(event.currentTarget);
+            } else {
+                hideExtras(event.currentTarget);
+            }
+        });
+    });
+}
+
+function getQueryParameter(name) {
+    const match = RegExp('[?&]' + name + '=([^&]*)').exec(window.location.search);
+    return match && decodeURIComponent(match[1].replace(/\+/g, ' '));
+}
+
+function init () { // eslint-disable-line no-unused-vars
+    resetSortHeaders();
+
+    addCollapse();
+
+    showFilters();
+
+    sortColumn(find('.initial-sort'));
+
+    findAll('.sortable').forEach(function(elem) {
+        elem.addEventListener('click',
+            function() {
+                sortColumn(elem);
+            }, false);
+    });
+}
+
+function sortTable(clicked, keyFunc) {
+    const rows = findAll('.results-table-row');
+    const reversed = !clicked.classList.contains('asc');
+    const sortedRows = sort(rows, keyFunc, reversed);
+    /* Whole table is removed here because browsers acts much slower
+     * when appending existing elements.
+     */
+    const thead = document.getElementById('results-table-head');
+    document.getElementById('results-table').remove();
+    const parent = document.createElement('table');
+    parent.id = 'results-table';
+    parent.appendChild(thead);
+    sortedRows.forEach(function(elem) {
+        parent.appendChild(elem);
+    });
+    document.getElementsByTagName('BODY')[0].appendChild(parent);
+}
+
+function sort(items, keyFunc, reversed) {
+    const sortArray = items.map(function(item, i) {
+        return [keyFunc(item), i];
+    });
+
+    sortArray.sort(function(a, b) {
+        const keyA = a[0];
+        const keyB = b[0];
+
+        if (keyA == keyB) return 0;
+
+        if (reversed) {
+            return keyA < keyB ? 1 : -1;
+        } else {
+            return keyA > keyB ? 1 : -1;
+        }
+    });
+
+    return sortArray.map(function(item) {
+        const index = item[1];
+        return items[index];
+    });
+}
+
+function keyAlpha(colIndex) {
+    return function(elem) {
+        return elem.childNodes[1].childNodes[colIndex].firstChild.data.toLowerCase();
+    };
+}
+
+function keyLink(colIndex) {
+    return function(elem) {
+        const dataCell = elem.childNodes[1].childNodes[colIndex].firstChild;
+        return dataCell == null ? '' : dataCell.innerText.toLowerCase();
+    };
+}
+
+function keyResult(colIndex) {
+    return function(elem) {
+        const strings = ['Error', 'Failed', 'Rerun', 'XFailed', 'XPassed',
+            'Skipped', 'Passed'];
+        return strings.indexOf(elem.childNodes[1].childNodes[colIndex].firstChild.data);
+    };
+}
+
+function resetSortHeaders() {
+    findAll('.sort-icon').forEach(function(elem) {
+        elem.parentNode.removeChild(elem);
+    });
+    findAll('.sortable').forEach(function(elem) {
+        const icon = document.createElement('div');
+        icon.className = 'sort-icon';
+        icon.textContent = 'vvv';
+        elem.insertBefore(icon, elem.firstChild);
+        elem.classList.remove('desc', 'active');
+        elem.classList.add('asc', 'inactive');
+    });
+}
+
+function toggleSortStates(elem) {
+    //if active, toggle between asc and desc
+    if (elem.classList.contains('active')) {
+        elem.classList.toggle('asc');
+        elem.classList.toggle('desc');
+    }
+
+    //if inactive, reset all other functions and add ascending active
+    if (elem.classList.contains('inactive')) {
+        resetSortHeaders();
+        elem.classList.remove('inactive');
+        elem.classList.add('active');
+    }
+}
+
+function isAllRowsHidden(value) {
+    return value.hidden == false;
+}
+
+function filterTable(elem) { // eslint-disable-line no-unused-vars
+    const outcomeAtt = 'data-test-result';
+    const outcome = elem.getAttribute(outcomeAtt);
+    const classOutcome = outcome + ' results-table-row';
+    const outcomeRows = document.getElementsByClassName(classOutcome);
+
+    for(let i = 0; i < outcomeRows.length; i++){
+        outcomeRows[i].hidden = !elem.checked;
+    }
+
+    const rows = findAll('.results-table-row').filter(isAllRowsHidden);
+    const allRowsHidden = rows.length == 0 ? true : false;
+    const notFoundMessage = document.getElementById('not-found-message');
+    notFoundMessage.hidden = !allRowsHidden;
+}
+</script>
+    <h1>Reports.CredCartReport.html</h1>
+    <p>Report generated on 22-Aug-2023 at 13:03:56 by <a href="https://pypi.python.org/pypi/pytest-html">pytest-html</a> v3.2.0</p>
+    <h2>Summary</h2>
+    <p>9 tests ran in 38.71 seconds. </p>
+    <p class="filter" hidden="true">(Un)check the boxes to filter the results.</p><input checked="true" class="filter" data-test-result="passed" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="passed">9 passed</span>, <input checked="true" class="filter" data-test-result="skipped" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="skipped">0 skipped</span>, <input checked="true" class="filter" data-test-result="failed" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="failed">0 failed</span>, <input checked="true" class="filter" data-test-result="error" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="error">0 errors</span>, <input checked="true" class="filter" data-test-result="xfailed" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="xfailed">0 expected failures</span>, <input checked="true" class="filter" data-test-result="xpassed" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="xpassed">0 unexpected passes</span>
+    <h2>Results</h2>
+    <table id="results-table">
+      <thead id="results-table-head">
+        <tr>
+          <th class="sortable result initial-sort" col="result">Result</th>
+          <th class="sortable" col="name">Test</th>
+          <th class="sortable" col="duration">Duration</th>
+          <th class="sortable links" col="links">Links</th></tr>
+        <tr hidden="true" id="not-found-message">
+          <th colspan="4">No results found. Try to check the filters</th></tr></thead>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">TestCases/test_Login_WithParameters.py::TestLoginWithParams::test_Login_With_Parameters_003[readLoginData2]</td>
+          <td class="col-duration">16.55</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">[gw2] win32 -- Python 3.11.3 D:\Rupali Prathamesh Pandit\CredCart2\venv\Scripts\python.exe<br/>[gw2] win32 -- Python 3.11.3 D:\Rupali Prathamesh Pandit\CredCart2\venv\Scripts\python.exe[gw2] win32 -- Python 3.11.3 D:\Rupali Prathamesh Pandit\CredCart2\venv\Scripts\python.exe[gw2] win32 -- Python 3.11.3 D:\Rupali Prathamesh Pandit\CredCart2\venv\Scripts\python.exe<br/> -------------------------------Captured log call-------------------------------- <br/>INFO     root:test_Login_WithParameters.py:13 test_Login_With_Parameters_003 is Started
+INFO     root:test_Login_WithParameters.py:15 Launching browser..!!
+INFO     root:test_Login_WithParameters.py:17 Go to --&gt;https://automation.credence.in/shop
+INFO     root:test_Login_WithParameters.py:22 Clicking on Login link
+INFO     root:test_Login_WithParameters.py:24 Entring Email--&gt;rupalirupali1@gmail.com
+INFO     root:test_Login_WithParameters.py:26 Entring password--&gt;123156
+INFO     root:test_Login_WithParameters.py:28 Clicking on Login Button
+INFO     root:test_Login_WithParameters.py:47 test_Login_With_Parameters_003 is Passed
+INFO     root:test_Login_WithParameters.py:55 test_Login_With_Parameters_003 is Completed<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">TestCases/test_Login.py::TestLogin::test_Login_002</td>
+          <td class="col-duration">7.42</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">[gw0] win32 -- Python 3.11.3 D:\Rupali Prathamesh Pandit\CredCart2\venv\Scripts\python.exe<br/>[gw0] win32 -- Python 3.11.3 D:\Rupali Prathamesh Pandit\CredCart2\venv\Scripts\python.exe[gw0] win32 -- Python 3.11.3 D:\Rupali Prathamesh Pandit\CredCart2\venv\Scripts\python.exe[gw0] win32 -- Python 3.11.3 D:\Rupali Prathamesh Pandit\CredCart2\venv\Scripts\python.exe<br/> -------------------------------Captured log call-------------------------------- <br/>INFO     root:test_Login.py:13 test_Login_002 is Started
+INFO     root:test_Login.py:15 Launching browser..!!
+INFO     root:test_Login.py:17 Go to --&gt;https://automation.credence.in/shop
+INFO     root:test_Login.py:21 Clicking on Login link
+INFO     root:test_Login.py:23 Entring Email--&gt;rupalirupali1@gmail.com
+INFO     root:test_Login.py:25 Entring password--&gt;123456
+INFO     root:test_Login.py:27 Clicking on Login Button
+INFO     root:test_Login.py:31 Clicking on Menu Button
+INFO     root:test_Login.py:33 Clicking on Logout Button
+INFO     root:test_Login.py:35 test_Login_002 is Passed
+INFO     root:test_Login.py:42 test_Login_002 is Completed<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">TestCases/test_Login_WithParameters.py::TestLoginWithParams::test_Login_With_Parameters_003[readLoginData0]</td>
+          <td class="col-duration">9.16</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">[gw1] win32 -- Python 3.11.3 D:\Rupali Prathamesh Pandit\CredCart2\venv\Scripts\python.exe<br/>[gw1] win32 -- Python 3.11.3 D:\Rupali Prathamesh Pandit\CredCart2\venv\Scripts\python.exe[gw1] win32 -- Python 3.11.3 D:\Rupali Prathamesh Pandit\CredCart2\venv\Scripts\python.exe[gw1] win32 -- Python 3.11.3 D:\Rupali Prathamesh Pandit\CredCart2\venv\Scripts\python.exe<br/> -------------------------------Captured log call-------------------------------- <br/>INFO     root:test_Login_WithParameters.py:13 test_Login_With_Parameters_003 is Started
+INFO     root:test_Login_WithParameters.py:15 Launching browser..!!
+INFO     root:test_Login_WithParameters.py:17 Go to --&gt;https://automation.credence.in/shop
+INFO     root:test_Login_WithParameters.py:22 Clicking on Login link
+INFO     root:test_Login_WithParameters.py:24 Entring Email--&gt;rupalirupali1@gmail.com
+INFO     root:test_Login_WithParameters.py:26 Entring password--&gt;123456
+INFO     root:test_Login_WithParameters.py:28 Clicking on Login Button
+INFO     root:test_Login_WithParameters.py:36 test_Login_With_Parameters_003 is Passed
+INFO     root:test_Login_WithParameters.py:55 test_Login_With_Parameters_003 is Completed<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">TestCases/test_PurchaseProductAndCheckout.py::TestPurchaseProduct::test_PurchaseProduct_005</td>
+          <td class="col-duration">17.34</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">[gw3] win32 -- Python 3.11.3 D:\Rupali Prathamesh Pandit\CredCart2\venv\Scripts\python.exe<br/>[gw3] win32 -- Python 3.11.3 D:\Rupali Prathamesh Pandit\CredCart2\venv\Scripts\python.exe[gw3] win32 -- Python 3.11.3 D:\Rupali Prathamesh Pandit\CredCart2\venv\Scripts\python.exe[gw3] win32 -- Python 3.11.3 D:\Rupali Prathamesh Pandit\CredCart2\venv\Scripts\python.exe<br/> -------------------------------Captured log call-------------------------------- <br/>INFO     root:test_PurchaseProductAndCheckout.py:16 test_PurchaseProduct_005 is Started
+INFO     root:test_PurchaseProductAndCheckout.py:18 Launching Browser..!!
+INFO     root:test_PurchaseProductAndCheckout.py:20 Go to--&gt;https://automation.credence.in/shop
+INFO     root:test_PurchaseProductAndCheckout.py:24 Clicking on Login Link
+INFO     root:test_PurchaseProductAndCheckout.py:26 Entering Username--&gt;rupalirupali1@gmail.com
+INFO     root:test_PurchaseProductAndCheckout.py:28 Entering Password--&gt;123456
+INFO     root:test_PurchaseProductAndCheckout.py:30 Clicking on Login Button
+INFO     root:test_PurchaseProductAndCheckout.py:34 Clicking on Apple MacbookPro product
+INFO     root:test_PurchaseProductAndCheckout.py:36 Added to Cart
+INFO     root:test_PurchaseProductAndCheckout.py:38 Clicked on Continue Shopping
+INFO     root:test_PurchaseProductAndCheckout.py:40 Clicking on Guitar
+INFO     root:test_PurchaseProductAndCheckout.py:42 Added to Cart
+INFO     root:test_PurchaseProductAndCheckout.py:44 Clicked on Continue Shopping
+INFO     root:test_PurchaseProductAndCheckout.py:46 Clicking on HeadPhones
+INFO     root:test_PurchaseProductAndCheckout.py:48 Added to Cart
+INFO     root:test_PurchaseProductAndCheckout.py:50 Clicking on Proceed to Checkout
+INFO     root:test_PurchaseProductAndCheckout.py:53 Entering First Name
+INFO     root:test_PurchaseProductAndCheckout.py:55 Entering Last Name
+INFO     root:test_PurchaseProductAndCheckout.py:57 Entering  Phone Number
+INFO     root:test_PurchaseProductAndCheckout.py:59 Entering Address
+INFO     root:test_PurchaseProductAndCheckout.py:61 Entering Zip Code
+INFO     root:test_PurchaseProductAndCheckout.py:63 Selecting State
+INFO     root:test_PurchaseProductAndCheckout.py:65 Entering Owner Name
+INFO     root:test_PurchaseProductAndCheckout.py:67 Entering CVV
+INFO     root:test_PurchaseProductAndCheckout.py:72 Entering Card Number
+INFO     root:test_PurchaseProductAndCheckout.py:74 Entering Expiry Year
+INFO     root:test_PurchaseProductAndCheckout.py:76 Entering Expiry Month
+INFO     root:test_PurchaseProductAndCheckout.py:79 Clicking on Continue to checkout
+INFO     root:test_PurchaseProductAndCheckout.py:82 test_PurchaseProduct_005 is Passed
+INFO     root:test_PurchaseProductAndCheckout.py:91 test_PurchaseProduct_005 is Completed<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">TestCases/test_Login_DDT.py::TestLoginDDT::test_Login_DDT_004</td>
+          <td class="col-duration">1.66</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">[gw0] win32 -- Python 3.11.3 D:\Rupali Prathamesh Pandit\CredCart2\venv\Scripts\python.exe<br/>[gw0] win32 -- Python 3.11.3 D:\Rupali Prathamesh Pandit\CredCart2\venv\Scripts\python.exe[gw0] win32 -- Python 3.11.3 D:\Rupali Prathamesh Pandit\CredCart2\venv\Scripts\python.exe[gw0] win32 -- Python 3.11.3 D:\Rupali Prathamesh Pandit\CredCart2\venv\Scripts\python.exe<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">TestCases/test_Login_WithParameters.py::TestLoginWithParams::test_Login_With_Parameters_003[readLoginData1]</td>
+          <td class="col-duration">15.71</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">[gw1] win32 -- Python 3.11.3 D:\Rupali Prathamesh Pandit\CredCart2\venv\Scripts\python.exe<br/>[gw1] win32 -- Python 3.11.3 D:\Rupali Prathamesh Pandit\CredCart2\venv\Scripts\python.exe[gw1] win32 -- Python 3.11.3 D:\Rupali Prathamesh Pandit\CredCart2\venv\Scripts\python.exe[gw1] win32 -- Python 3.11.3 D:\Rupali Prathamesh Pandit\CredCart2\venv\Scripts\python.exe<br/> -------------------------------Captured log call-------------------------------- <br/>INFO     root:test_Login_WithParameters.py:13 test_Login_With_Parameters_003 is Started
+INFO     root:test_Login_WithParameters.py:15 Launching browser..!!
+INFO     root:test_Login_WithParameters.py:17 Go to --&gt;https://automation.credence.in/shop
+INFO     root:test_Login_WithParameters.py:22 Clicking on Login link
+INFO     root:test_Login_WithParameters.py:24 Entring Email--&gt;rup1alirupali1@gmail.com
+INFO     root:test_Login_WithParameters.py:26 Entring password--&gt;123456
+INFO     root:test_Login_WithParameters.py:28 Clicking on Login Button
+INFO     root:test_Login_WithParameters.py:47 test_Login_With_Parameters_003 is Passed
+INFO     root:test_Login_WithParameters.py:55 test_Login_With_Parameters_003 is Completed<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">TestCases/test_ValidatingCalculations.py::TestValidateCalculations::test_Validate_Calculations_006</td>
+          <td class="col-duration">16.82</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">[gw0] win32 -- Python 3.11.3 D:\Rupali Prathamesh Pandit\CredCart2\venv\Scripts\python.exe<br/>[gw0] win32 -- Python 3.11.3 D:\Rupali Prathamesh Pandit\CredCart2\venv\Scripts\python.exe[gw0] win32 -- Python 3.11.3 D:\Rupali Prathamesh Pandit\CredCart2\venv\Scripts\python.exe[gw0] win32 -- Python 3.11.3 D:\Rupali Prathamesh Pandit\CredCart2\venv\Scripts\python.exe<br/> ------------------------------Captured stdout call------------------------------ <br/>Values are Matching--!!
+<br/> -------------------------------Captured log call-------------------------------- <br/>INFO     root:test_ValidatingCalculations.py:17 test_Validate_Calculations_006 is Started
+INFO     root:test_ValidatingCalculations.py:19 Launching Browser..!!
+INFO     root:test_ValidatingCalculations.py:21 Go to--&gt;https://automation.credence.in/shop
+INFO     root:test_ValidatingCalculations.py:25 Clicking on Login Link
+INFO     root:test_ValidatingCalculations.py:27 Entering Username--&gt;rupalirupali1@gmail.com
+INFO     root:test_ValidatingCalculations.py:29 Entering Password--&gt;123456
+INFO     root:test_ValidatingCalculations.py:31 Clicking on Login Button
+INFO     root:test_ValidatingCalculations.py:35 Clicking on Apple MacbookPro product
+INFO     root:test_ValidatingCalculations.py:37 Added to Cart
+INFO     root:test_ValidatingCalculations.py:39 Clicked on Continue Shopping
+INFO     root:test_ValidatingCalculations.py:41 Clicking on Guitar
+INFO     root:test_ValidatingCalculations.py:43 Added to Cart
+INFO     root:test_ValidatingCalculations.py:45 Clicked on Continue Shopping
+INFO     root:test_ValidatingCalculations.py:47 Clicking on HeadPhones
+INFO     root:test_ValidatingCalculations.py:49 Added to Cart
+INFO     root:test_ValidatingCalculations.py:63 Creating list for Actual Prices
+INFO     root:test_ValidatingCalculations.py:74 Create list for Expected Prices
+INFO     root:test_ValidatingCalculations.py:76 Compare Actual Prices with Expected ones
+INFO     root:test_ValidatingCalculations.py:79 Calculations are matched
+INFO     root:test_ValidatingCalculations.py:80 test_Validate_Calculations_006 is Passed<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">TestCases/test_Login_WithParameters.py::TestLoginWithParams::test_Login_With_Parameters_003[readLoginData3]</td>
+          <td class="col-duration">15.06</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">[gw2] win32 -- Python 3.11.3 D:\Rupali Prathamesh Pandit\CredCart2\venv\Scripts\python.exe<br/>[gw2] win32 -- Python 3.11.3 D:\Rupali Prathamesh Pandit\CredCart2\venv\Scripts\python.exe[gw2] win32 -- Python 3.11.3 D:\Rupali Prathamesh Pandit\CredCart2\venv\Scripts\python.exe[gw2] win32 -- Python 3.11.3 D:\Rupali Prathamesh Pandit\CredCart2\venv\Scripts\python.exe<br/> -------------------------------Captured log call-------------------------------- <br/>INFO     root:test_Login_WithParameters.py:13 test_Login_With_Parameters_003 is Started
+INFO     root:test_Login_WithParameters.py:15 Launching browser..!!
+INFO     root:test_Login_WithParameters.py:17 Go to --&gt;https://automation.credence.in/shop
+INFO     root:test_Login_WithParameters.py:22 Clicking on Login link
+INFO     root:test_Login_WithParameters.py:24 Entring Email--&gt;rupalir1upali1@gmail.com
+INFO     root:test_Login_WithParameters.py:26 Entring password--&gt;1234156
+INFO     root:test_Login_WithParameters.py:28 Clicking on Login Button
+INFO     root:test_Login_WithParameters.py:47 test_Login_With_Parameters_003 is Passed
+INFO     root:test_Login_WithParameters.py:55 test_Login_With_Parameters_003 is Completed<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">TestCases/test_RegisterUser.py::TestRegister::test_RegisterUser_001</td>
+          <td class="col-duration">12.56</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">[gw3] win32 -- Python 3.11.3 D:\Rupali Prathamesh Pandit\CredCart2\venv\Scripts\python.exe<br/>[gw3] win32 -- Python 3.11.3 D:\Rupali Prathamesh Pandit\CredCart2\venv\Scripts\python.exe[gw3] win32 -- Python 3.11.3 D:\Rupali Prathamesh Pandit\CredCart2\venv\Scripts\python.exe[gw3] win32 -- Python 3.11.3 D:\Rupali Prathamesh Pandit\CredCart2\venv\Scripts\python.exe<br/> -------------------------------Captured log call-------------------------------- <br/>INFO     root:test_RegisterUser.py:13 test_RegisterUser_001 is Started
+INFO     root:test_RegisterUser.py:15 Launching browser---!!
+INFO     root:test_RegisterUser.py:17 Go to --&gt; https://automation.credence.in/shop
+INFO     root:test_RegisterUser.py:21 CLicked on registration link
+INFO     root:test_RegisterUser.py:23 Entering Username..
+INFO     root:test_RegisterUser.py:25 Entering Email..
+INFO     root:test_RegisterUser.py:27 Entering Password..
+INFO     root:test_RegisterUser.py:29 Confirming Password..
+INFO     root:test_RegisterUser.py:31 Clicking on Register Button
+INFO     root:test_RegisterUser.py:35 test_RegisterUser_001 is Passed
+INFO     root:test_RegisterUser.py:41 test_RegisterUser_001 is Completed<br/></div></td></tr></tbody></table></body></html>
